@@ -2,7 +2,6 @@
 This patch enhances the original SLIR (https://github.com/lencioni/SLIR) with watermarking capabilities.
 
 # Setting up
-Download and unpack in your original SLIR folder. Copy & overwrite the path files from the unpacked folder.
 In your `slirconfig.class.php` file, add the following:
 
     self::$watermark = true; // true to enable watermarking, false otherwise
