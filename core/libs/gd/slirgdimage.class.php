@@ -4,28 +4,21 @@
  *
  * This file is part of SLIR (Smart Lencioni Image Resizer).
  *
- * Copyright (c) 2014 Joe Lencioni <joe.lencioni@gmail.com>
+ * SLIR is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * SLIR is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * You should have received a copy of the GNU General Public License
+ * along with SLIR.  If not, see <http://www.gnu.org/licenses/>.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- * @copyright Copyright © 2014, Joe Lencioni
- * @license MIT
+ * @copyright Copyright © 2011, Joe Lencioni
+ * @license http://opensource.org/licenses/gpl-3.0.html GNU General Public License version 3 (GPLv3)
  * @since 2.0
  * @package SLIR
  */
@@ -51,17 +44,22 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
    */
   private $data;
 
-  private $transparencyEnabled = false;
+  /**
+   * @var string $data
+   */
+  private $watermark;
 
   /**
    * @param string $path
    * @return void
    * @since 2.0
    */
-  public function __construct($path = null)
+  public function __construct($path = null, $watermark = false)
   {
     // Allows some funky JPEGs to work instead of breaking everything
     ini_set('gd.jpeg_ignore_warning', '1');
+
+    $this->watermark = $watermark;
 
     return parent::__construct($path);
   }
@@ -107,9 +105,11 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
       if ($this->getPath() === null) {
         $this->create();
       } else {
+        
         try {
           if ($this->isJPEG()) {
-            $this->image  = imagecreatefromjpeg($this->getFullPath());
+						// ini_set('memory_limit', '512M');
+						$this->image  = imagecreatefromjpeg($this->getFullPath());
           } else if ($this->isGIF()) {
             $this->image  = imagecreatefromgif($this->getFullPath());
           } else if ($this->isPNG()) {
@@ -122,11 +122,38 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
           $this->image  = imagecreatefromstring(file_get_contents($this->getFullPath()));
         }
 
+        if(SLIRConfig::$watermark && $this->watermark){
+          $this->watermark();
+        }
+
         $this->info = null;
       }
+    }else{
+      
+
     }
 
     return $this->image;
+  }
+
+  public function watermark(){
+    $im = $this->image;
+
+    $stamp = imagecreatefrompng(SLIRConfig::$watermarkFile);
+    
+    $marge_right = (imagesx($im) - imagesx($stamp))/2;
+    $marge_bottom = (imagesy($im) - imagesy($stamp))/2;
+    
+    $sx = imagesx($stamp);
+    $sy = imagesy($stamp);
+    
+    // Copy the stamp image onto our photo using the margin offsets and the photo 
+    // width to calculate positioning of the stamp. 
+    imagecopy($im, $stamp, imagesx($im) - $sx - $marge_right, imagesy($im) - $sy - $marge_bottom, 0, 0, imagesx($stamp), imagesy($stamp));
+    
+    $this->image = $im;
+
+    return $this;
   }
 
   /**
@@ -332,9 +359,6 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
   {
     imagealphablending($this->getImage(), false);
     imagesavealpha($this->getImage(), true);
-
-    $this->transparencyEnabled = true;
-
     return $this;
   }
 
@@ -345,33 +369,14 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
    */
   public function fill()
   {
-    $color = $this->getBackground();
+    $color      = $this->getBackground();
 
-    if ($color === null) {
-      $color = "ffffff";
-    }
-
-    $background = null;
-
-    if ($this->transparencyEnabled === true) {
-      $background = imagecolorallocatealpha(
+    $background = imagecolorallocate(
         $this->getImage(),
         hexdec($color[0].$color[1]),
         hexdec($color[2].$color[3]),
-        hexdec($color[4].$color[5]),
-        127
-      );
-    }
-    else {
-
-      $background = imagecolorallocate(
-          $this->getImage(),
-          hexdec($color[0].$color[1]),
-          hexdec($color[2].$color[3]),
-          hexdec($color[4].$color[5])
-      );
-
-    }
+        hexdec($color[4].$color[5])
+    );
 
     imagefilledrectangle($this->getImage(), 0, 0, $this->getWidth(), $this->getHeight(), $background);
 
@@ -441,13 +446,9 @@ class SLIRGDImage extends SLIRImage implements SLIRImageLibrary
     $class    = __CLASS__;
     $cropped  = new $class();
 
-    $cropped->setMimeType($this->getMimeType()) // To enable again transparency on PNGs !
-            ->setWidth($this->getCropWidth())
-            ->setHeight($this->getCropHeight())
-            ->setBackground($this->getBackground());
-           
-
-    $cropped->background();
+    $cropped->setWidth($this->getCropWidth())
+      ->setHeight($this->getCropHeight())
+      ->setBackground($this->getBackground());
 
     // Copy rendered image to cropped image
     imagecopy(

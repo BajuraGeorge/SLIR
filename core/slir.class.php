@@ -4,28 +4,21 @@
  *
  * This file is part of SLIR (Smart Lencioni Image Resizer).
  *
- * Copyright (c) 2014 Joe Lencioni <joe.lencioni@gmail.com>
+ * SLIR is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
+ * SLIR is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
+ * You should have received a copy of the GNU General Public License
+ * along with SLIR.  If not, see <http://www.gnu.org/licenses/>.
  *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
- *
- * @copyright Copyright © 2014, Joe Lencioni
- * @license MIT
+ * @copyright Copyright © 2011, Joe Lencioni
+ * @license http://opensource.org/licenses/gpl-3.0.html GNU General Public License version 3 (GPLv3)
  * @since 2.0
  * @package SLIR
  */
@@ -304,7 +297,7 @@ class SLIR
   {
     if (empty($this->source)) {
       require_once 'libs/gd/slirgdimage.class.php';
-      $this->source = new SLIRGDImage($this->getRequest()->path);
+      $this->source = new SLIRGDImage($this->getRequest()->path, $this->getRequest()->watermark);
 
       // If either a max width or max height are not specified or larger than
       // the source image we default to the dimension of the source image so
@@ -601,9 +594,7 @@ class SLIR
     $this->getRendered()->background();
 
     // Resample the original image into the resized canvas we set up earlier
-    if ($this->getSource()->getWidth() !== $this->getRendered()->getWidth() || 
-        $this->getSource()->getHeight() != $this->getRendered()->getHeight()) {
-
+    if ($this->getSource()->getWidth() !== $this->getRendered()->getWidth() || $this->getSource()->getHeight() != $this->getRendered()->getHeight()) {
       $this->getSource()->resample($this->getRendered());
     } else {
       // No resizing is needed, so make a clean copy
@@ -708,11 +699,7 @@ class SLIR
    */
   private function isSourceImageDesired()
   {
-    if ($this->isWidthDifferent() || 
-        $this->isHeightDifferent() || 
-        $this->isBackgroundFillOn() || 
-        $this->isQualityOn() || 
-        $this->isCroppingNeeded()) {
+    if ($this->isWidthDifferent() || $this->isHeightDifferent() || $this->isBackgroundFillOn() || $this->isQualityOn() || $this->isCroppingNeeded()) {
       return false;
     } else {
       return true;
@@ -1222,29 +1209,23 @@ class SLIR
    */
   private function copyEXIF($cacheFilePath)
   {
-    $pelJpegLib = dirname(__FILE__) . '/../pel/src/PelJpeg.php';
+    // Make sure to suppress strict warning thrown by PEL
+    require_once dirname(__FILE__) . '/../pel/src/PelJpeg.php';
 
-    // Linking to pel library will break MIT license
-    // Make the EXIF copy optional
-    if (file_exists($pelJpegLib)) {
-      // Make sure to suppress strict warning thrown by PEL
-      require_once($pelJpegLib);
+    $jpeg   = new PelJpeg($this->getSource()->getFullPath());
+    $exif   = $jpeg->getExif();
 
-      $jpeg   = new PelJpeg($this->getSource()->getFullPath());
-      $exif   = $jpeg->getExif();
+    if ($exif !== null) {
+      $jpeg   = new PelJpeg($cacheFilePath);
+      $jpeg->setExif($exif);
+      $imageData  = $jpeg->getBytes();
 
-      if ($exif !== null) {
-        $jpeg   = new PelJpeg($cacheFilePath);
-        $jpeg->setExif($exif);
-        $imageData  = $jpeg->getBytes();
-
-        if (!file_put_contents($cacheFilePath, $imageData)) {
-          return false;
-        }
-
-        return $imageData;
+      if (!file_put_contents($cacheFilePath, $imageData)) {
+        return false;
       }
-    }
+
+      return $imageData;
+    } // if
 
     return file_get_contents($cacheFilePath);
   }
@@ -1314,7 +1295,7 @@ class SLIR
   {
     $this->headers[] = $header;
 
-    if (!$this->isCLI() && !headers_sent()) {
+    if (!$this->isCLI()) {
       header($header);
     }
 
